@@ -28,31 +28,51 @@ c.send('connection')
 msg = c.receive()
 print(msg)
 
-c.send('tilt_angle', 0)
+c.send('pan_angle', 0)
 msg = c.receive()
 print(msg)
 
-time.sleep(3);
 
-c.send('tilt_angle', 45)
+time.sleep(4);
+
+
+c.send('pan_angle', 90)
 msg = c.receive()
 print(msg)
 
-time.sleep(3);
 
-c.send('tilt_angle', 90)
+time.sleep(6);
+
+
+c.send('pan_angle', 180)
 msg = c.receive()
 print(msg)
 
-time.sleep(3);
-
-c.send('tilt_angle', 180)
-msg = c.receive()
-print(msg)
-
-time.sleep(5);
-
-c.send('tilt_angle', 0)
-msg = c.receive()
-print(msg)
+# c.send('tilt_angle', 0)
+# msg = c.receive()
+# print(msg)
+#
+# time.sleep(3);
+#
+# c.send('tilt_angle', 45)
+# msg = c.receive()
+# print(msg)
+#
+# time.sleep(3);
+#
+# c.send('tilt_angle', 90)
+# msg = c.receive()
+# print(msg)
+#
+# time.sleep(3);
+#
+# c.send('tilt_angle', 180)
+# msg = c.receive()
+# print(msg)
+#
+# time.sleep(5);
+#
+# c.send('tilt_angle', 0)
+# msg = c.receive()
+# print(msg)
 

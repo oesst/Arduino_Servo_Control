@@ -1,4 +1,4 @@
-/* -----------------------------------------------------------------------------
+  /* -----------------------------------------------------------------------------
    Example .ino file for arduino, compiled with CmdMessenger.h and
    CmdMessenger.cpp in the sketch directory.
   ----------------------------------------------------------------------------*/
@@ -12,6 +12,12 @@ const int MIN_P_270 = 500;
 const int MAX_P_270 = 2600;
 // define rotation speed for 270 degree servo (tilt)
 const int ROT_SPEED_270 = 30;
+
+// min and max puls width for 270 degree servo (tilt)
+const int MIN_P_180 = 650;
+const int MAX_P_180 = 2000;
+// define rotation speed for 270 degree servo (tilt)
+const int ROT_SPEED_180 = 30;
 
 /* Initialize servos */
 int pan_servo_pin = 8;
@@ -40,6 +46,7 @@ Servo tilt_servo;
 
 /* initialize some storage values */
 int current_tilt_angle = 0;
+int current_pan_angle = 0;
 
 
 /* Create callback functions to deal with incoming messages */
@@ -55,11 +62,44 @@ void on_pan_angle(void) {
 
   /* Get servo control angle */
   int angle = c.readBinArg<int>();
-  /* Write angle */
-  pan_servo.write(angle);
+
+
+ // rule of three to define microseconds per one degree
+  const double SIG = (MAX_P_180 - MIN_P_180) / 180.0;
+
 
   /* send confirmation */
   c.sendBinCmd(pan_angle_set, angle);
+
+
+  // move counter clock wise
+  if (current_pan_angle < angle) {
+    // add min_p since we start at the min pulse width
+    for (int pos = (MIN_P_180 + SIG * current_pan_angle); pos <= MIN_P_180 + angle * SIG; pos += SIG) {
+      // delay to get proper rotation speed
+      delay(1000.0 / ROT_SPEED_180);
+      pan_servo.writeMicroseconds(pos);
+    }
+
+  } // move clock wise
+  else {
+    // add min_p since we start at the min pulse width
+    for (int pos = (MIN_P_180 + SIG * current_pan_angle); pos >= MIN_P_180 + angle * SIG; pos -= SIG) {
+      // delay to get proper rotation speed
+      delay(1000.0 / ROT_SPEED_180);
+      pan_servo.writeMicroseconds(pos);
+    }
+
+
+  }
+  // save current angle to achieve a smooth turning
+  current_pan_angle = angle;
+
+
+
+
+
+  
 }
 
 /* callback */
@@ -101,7 +141,6 @@ void on_tilt_angle(void) {
   current_tilt_angle = angle;
 
 
-  /* send confirmation */
 }
 
 /* callback */
@@ -119,15 +158,15 @@ void attach_callbacks(void) {
 
 
 void reset_all_servos() {
-  tilt_servo.writeMicroseconds(500);
-  pan_servo.write(90);
+  tilt_servo.writeMicroseconds(MIN_P_270);
+  pan_servo.writeMicroseconds(MIN_P_180);
 }
 
 void setup() {
   /* attach servos to pins */
-  pan_servo.attach(pan_servo_pin);
+  pan_servo.attach(pan_servo_pin,MIN_P_180, MAX_P_180);
   // set correct pulse width for 270 degree servo
-  tilt_servo.attach(tilt_servo_pin, 500, 2500);
+  tilt_servo.attach(tilt_servo_pin, MIN_P_270, MAX_P_270);
 
 
   /* reset servo angle */
