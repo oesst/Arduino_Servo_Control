@@ -9,19 +9,26 @@
 /* Constants */
 // min and max puls width for 270 degree servo (tilt)
 const int MIN_P_270 = 500;
-const int MAX_P_270 = 2600;
+const int MAX_P_270 = 2500;
 // define rotation speed for 270 degree servo (tilt)
-const int ROT_SPEED_270 = 30;
+const int ROT_SPEED_270 = 80;
 
-// min and max puls width for 270 degree servo (tilt)
-const int MIN_P_180 = 650;
-const int MAX_P_180 = 2000;
-// define rotation speed for 270 degree servo (tilt)
-const int ROT_SPEED_180 = 30;
+// min and max puls width for 10 degree servo (tilt)
+// Perfectly fitting for trafo power supply 6.4V 
+const int MIN_P_180 = 800;
+const int MAX_P_180 = 2150;
+// define rotation speed for 180 degree servo (tilt)
+const int ROT_SPEED_180 = 100;
+
+// rule of three to define microseconds per one degree
+const double SIG_180 = (MAX_P_180 - MIN_P_180) / 180.0;
+
+// rule of three to define microseconds per one degree
+const double SIG_270 = (MAX_P_270 - MIN_P_270) / 270.0;
 
 /* Initialize servos */
-int pan_servo_pin = 8;
-int tilt_servo_pin = 7;
+int servo_180_pin = 8;
+int servo_270_pin = 7;
 
 /* Define available CmdMessenger commands */
 enum {
@@ -40,13 +47,13 @@ const int BAUD_RATE = 9600;
 CmdMessenger c = CmdMessenger(Serial, ',', ';', '/');
 
 /* Create a servo objects */
-Servo pan_servo;
-Servo tilt_servo;
+Servo servo_270;
+Servo servo_180;
 
 
 /* initialize some storage values */
-int current_tilt_angle = 0;
 int current_pan_angle = 0;
+int current_tilt_angle = 0;
 
 
 /* Create callback functions to deal with incoming messages */
@@ -63,43 +70,31 @@ void on_pan_angle(void) {
   /* Get servo control angle */
   int angle = c.readBinArg<int>();
 
-
- // rule of three to define microseconds per one degree
-  const double SIG = (MAX_P_180 - MIN_P_180) / 180.0;
-
-
-  /* send confirmation */
-  c.sendBinCmd(pan_angle_set, angle);
-
-
   // move counter clock wise
-  if (current_pan_angle < angle) {
+  if (current_tilt_angle < angle) {
     // add min_p since we start at the min pulse width
-    for (int pos = (MIN_P_180 + SIG * current_pan_angle); pos <= MIN_P_180 + angle * SIG; pos += SIG) {
+    for (int pos = (MIN_P_180 + SIG_180 * current_tilt_angle); pos <= MIN_P_180 + angle * SIG_180; pos += SIG_180) {
       // delay to get proper rotation speed
       delay(1000.0 / ROT_SPEED_180);
-      pan_servo.writeMicroseconds(pos);
+      servo_270.writeMicroseconds(pos);
     }
 
   } // move clock wise
   else {
     // add min_p since we start at the min pulse width
-    for (int pos = (MIN_P_180 + SIG * current_pan_angle); pos >= MIN_P_180 + angle * SIG; pos -= SIG) {
+    for (int pos = (MIN_P_180 + SIG_180 * current_tilt_angle); pos >= MIN_P_180 + angle * SIG_180; pos -= SIG_180) {
       // delay to get proper rotation speed
       delay(1000.0 / ROT_SPEED_180);
-      pan_servo.writeMicroseconds(pos);
+      servo_270.writeMicroseconds(pos);
     }
 
 
   }
   // save current angle to achieve a smooth turning
-  current_pan_angle = angle;
+  current_tilt_angle = angle;
 
-
-
-
-
-  
+  /* send confirmation */
+  c.sendBinCmd(pan_angle_set, angle);
 }
 
 /* callback */
@@ -108,37 +103,31 @@ void on_tilt_angle(void) {
   /* Get servo control angle */
   int angle = c.readBinArg<int>();
   /* Write angle */
-
-  // rule of three to define microseconds per one degree
-  const double SIG = (MAX_P_270 - MIN_P_270) / 270.0;
-
-
-  /* send ack back */
-  c.sendBinCmd(tilt_angle_set, angle);
-
-
   // move counter clock wise
-  if (current_tilt_angle < angle) {
+  if (current_pan_angle < angle) {
     // add min_p since we start at the min pulse width
-    for (int pos = (MIN_P_270 + SIG * current_tilt_angle); pos <= MIN_P_270 + angle * SIG; pos += SIG) {
+    for (int pos = (MIN_P_270 + SIG_270 * current_pan_angle); pos <= MIN_P_270 + angle * SIG_270; pos += SIG_270) {
       // delay to get proper rotation speed
       delay(1000.0 / ROT_SPEED_270);
-      tilt_servo.writeMicroseconds(pos);
+      servo_180.writeMicroseconds(pos);
     }
 
   } // move clock wise
   else {
     // add min_p since we start at the min pulse width
-    for (int pos = (MIN_P_270 + SIG * current_tilt_angle); pos >= MIN_P_270 + angle * SIG; pos -= SIG) {
+    for (int pos = (MIN_P_270 + SIG_270 * current_pan_angle); pos >= MIN_P_270 + angle * SIG_270; pos -= SIG_270) {
       // delay to get proper rotation speed
       delay(1000.0 / ROT_SPEED_270);
-      tilt_servo.writeMicroseconds(pos);
+      servo_180.writeMicroseconds(pos);
     }
 
 
   }
   // save current angle to achieve a smooth turning
-  current_tilt_angle = angle;
+  current_pan_angle = angle;
+
+  /* send ack back */
+  c.sendBinCmd(tilt_angle_set, angle);
 
 
 }
@@ -158,15 +147,15 @@ void attach_callbacks(void) {
 
 
 void reset_all_servos() {
-  tilt_servo.writeMicroseconds(MIN_P_270);
-  pan_servo.writeMicroseconds(MIN_P_180);
+  servo_180.writeMicroseconds(MIN_P_270);
+  servo_270.writeMicroseconds(MIN_P_180);
 }
 
 void setup() {
   /* attach servos to pins */
-  pan_servo.attach(pan_servo_pin,MIN_P_180, MAX_P_180);
+  servo_270.attach(servo_180_pin,MIN_P_180, MAX_P_180);
   // set correct pulse width for 270 degree servo
-  tilt_servo.attach(tilt_servo_pin, MIN_P_270, MAX_P_270);
+  servo_180.attach(servo_270_pin, MIN_P_270, MAX_P_270);
 
 
   /* reset servo angle */
@@ -180,4 +169,3 @@ void setup() {
 void loop() {
   c.feedinSerialData();
 }
-
