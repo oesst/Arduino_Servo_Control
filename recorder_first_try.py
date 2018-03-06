@@ -25,19 +25,19 @@ class SyncedRecorder:
 
     def initMicrophones(self):
         self.stream_l = self.pa.open(format=self.FORMAT,
-                                     channels=1,
+                                     channels=2,
                                      rate=self.RATE,
                                      input=True,
-                                     output=True,
-                                     input_device_index=6,
+                                     output=False,
+                                     input_device_index=0,
                                      frames_per_buffer=self.CHUNK_SIZE)
 
         self.stream_r = self.pa.open(format=self.FORMAT,
                                      channels=1,
                                      rate=self.RATE,
                                      input=True,
-                                     output=True,
-                                     input_device_index=7,
+                                     output=False,
+                                     input_device_index=14,
                                      frames_per_buffer=self.CHUNK_SIZE)
 
         # self.output_stream = self.pa.open(format=self.pa.get_format_from_width(1),
@@ -45,23 +45,7 @@ class SyncedRecorder:
         #                                   rate=self.RATE,
         #                                   output=True)
 
-    def play_sound(self):
-        frequency = 500  # Hz, waves per second, 261.63=C4-note.
-        duration = 5  # seconds to play sound
 
-        number_of_frames = int(self.RATE * duration)
-        rest_frames = number_of_frames % self.RATE
-        wave_data = ''
-
-        # generating waves
-        for x in range(number_of_frames):
-            wave_data = wave_data + chr(int(np.sin(x / ((self.RATE / frequency) / np.pi)) * 127 + 128))
-
-        for x in range(rest_frames):
-            wave_data = wave_data + chr(128)
-
-        self.output_stream.write(wave_data)
-        self.output_stream.stop()
 
     def record(self, recording_time):
 
@@ -82,14 +66,13 @@ class SyncedRecorder:
         # initialization
         self.initMicrophones()
 
-        #self.play_sound()
 
-
+        print('Recording ...')
 
         while 1:
             # little endian, signed short
-            data_l = self.stream_l.read(self.CHUNK_SIZE)
-            data_r = self.stream_r.read(self.CHUNK_SIZE)
+            data_l = self.stream_l.read(self.CHUNK_SIZE,exception_on_overflow = True)
+            data_r = self.stream_r.read(self.CHUNK_SIZE,exception_on_overflow = True)
 
             data_l = array.array('h', data_l)
             data_r = array.array('h', data_r)
