@@ -1,6 +1,8 @@
 import time
 import signal
-from synced_recorder import SyncedRecorder
+
+import os
+
 from servo_controller import ServoController
 
 ##############################################
@@ -10,13 +12,27 @@ from servo_controller import ServoController
 controller = ServoController();
 
 ##############################################
-###       Initialize Sound Recorder        ###
+###     Initialize Sound/DAS1 Recorder     ###
 ##############################################
+RECORD_DAS1 = True
 
 # Define recording time in seconds
-RECORDING_TIME = 10
-FILE_NAME_PREFIX = 'recordings/noise_low'
-recorder = SyncedRecorder()
+RECORDING_TIME = 2
+# If needed define path to playback sound
+# ATTENTION: The duration of the recording is set to the duration of the playback_sound file !!
+PLAYBACK_SOUND = '/home/oesst/cloudStore_UU/code_for_duc/noise_bursts.wav'
+DIRECTORY = 'recordings/'
+FILE_NAME_PREFIX = 'noise_low'
+
+# choose what data to log. Do NOT forget to turn on UDP output in JAER
+if RECORD_DAS1:
+    from das1_logger import DAS1Logger
+    recorder = DAS1Logger()
+else:
+    from synced_recorder import SyncedRecorder
+    recorder = SyncedRecorder()
+
+
 
 # Make sure we set the head back to the zero position before exiting
 def reset_and_exit(signal, frame):
@@ -27,6 +43,7 @@ def reset_and_exit(signal, frame):
 # register the exiting function
 signal.signal(signal.SIGINT, reset_and_exit)
 signal.signal(signal.SIGSEGV, reset_and_exit)
+signal.signal(signal.SIGTERM, reset_and_exit)
 
 ##############################################
 ###         Define Head Locations          ###
@@ -44,8 +61,6 @@ elevations = [0]
 controller.reset()
 
 
-
-
 try:
 
 
@@ -54,16 +69,27 @@ try:
         # bring head in correct position
         controller.set_azimuth(azi)
 
+        azi_directory = 'azimuth_' + str(azi) + '/'
+        # make sure directory exists
+        os.makedirs(DIRECTORY+azi_directory, exist_ok=True)
         for elev in elevations:
             # bring head in correct position
             controller.set_elevation(elev)
             # time.sleep(1) # <- no need to wait because recorder waits before recording automatically
 
-            # recording at that position
-            recorder.record(RECORDING_TIME)
-            file_name = FILE_NAME_PREFIX + '_azi_' + str(azi) + '_ele_' + str(elev)
-            recorder.save(file_name)
-            recorder.finish()
+            time.sleep(1)
+
+
+            save_path = DIRECTORY +azi_directory+ FILE_NAME_PREFIX + '_azi_' + str(azi) + '_ele_' + str(elev)
+
+            if RECORD_DAS1:
+                recorder.logging(RECORDING_TIME, save_path)
+                recorder.close()
+            else:
+                # recording at that position
+                recorder.record(RECORDING_TIME)
+                recorder.save(save_path)
+                recorder.finish()
 
 
 

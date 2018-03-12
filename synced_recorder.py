@@ -2,10 +2,11 @@ import array
 import struct
 import time
 import wave
+import soundfile as sf
 
 import numpy as np
 import pyaudio
-
+import playsound as ps
 
 ### 2 Mic Recorder ###
 ######################
@@ -16,12 +17,20 @@ import pyaudio
 
 
 class SyncedRecorder:
-    def __init__(self):
+    def __init__(self,playback_sound = []):
         self.pa = pyaudio.PyAudio()
 
         self.RATE = 44100
         self.CHUNK_SIZE = 1024
         self.FORMAT = pyaudio.paInt16
+        self.play_sound = False
+
+        # if given play that sound
+        if playback_sound:
+            self.play_sound = True
+            self.playback_sound = playback_sound
+            self.recording_time = sf.info(playback_sound).duration
+            self.RATE = sf.info(playback_sound).samplerate
 
     def initMicrophones(self):
         self.stream = self.pa.open(format=self.FORMAT,
@@ -36,7 +45,12 @@ class SyncedRecorder:
 
     def record(self, recording_time):
 
-        print("Recording %i seconds in ..." % int(recording_time))
+        if self.play_sound:
+            print("Play back sound %s and recording %i seconds in ..." % (self.playback_sound,int(recording_time)))
+            recording_time = self.recording_time
+        else:
+            print("Recording %i seconds in ..." % int(recording_time))
+
         now = time.time()
 
         count = 2
@@ -49,11 +63,17 @@ class SyncedRecorder:
 
         data_array = array.array('h')
 
+
+
         # initialization
         self.initMicrophones()
 
 
         print('Recording ...')
+
+
+        if self.play_sound:
+            ps.playsound(self.playback_sound)
 
         for i in range(0, int(self.RATE / self.CHUNK_SIZE * recording_time)):
             # little endian, signed short
@@ -81,16 +101,16 @@ class SyncedRecorder:
         print("Saving recordings to files: %s_right.wav and %s_left.wav" % (file_name, file_name))
 
         wf = wave.open((file_name + '_left.wav'), 'wb')
-        wf.setnchannels(2)
+        wf.setnchannels(1)
         wf.setsampwidth(self.sample_size)
-        wf.setframerate(self.RATE/2)
+        wf.setframerate(self.RATE)
         wf.writeframes(data_l)
         wf.close()
 
         wf = wave.open((file_name + '_right.wav'), 'wb')
-        wf.setnchannels(2)
+        wf.setnchannels(1)
         wf.setsampwidth(self.sample_size)
-        wf.setframerate(self.RATE / 2)
+        wf.setframerate(self.RATE )
         wf.writeframes(data_r)
         wf.close()
 
@@ -115,7 +135,7 @@ if __name__ == '__main__':
         print('Please provide exactly two arguments: recording time and file name e.g. python 2_mic_sync_recorder test 5')
         exit(1)
 
-    recording_time = int(sys.argv[2])
+    recording_time = float(sys.argv[2])
 
     recorder = SyncedRecorder()
     recorder.record(recording_time)
