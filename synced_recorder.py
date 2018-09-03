@@ -69,13 +69,14 @@ class SyncedRecorder:
         self.initMicrophones()
 
 
-        print('Recording ...')
 
 
         if self.play_sound:
-            ps.playsound(self.playback_sound)
+            ps.playsound(self.playback_sound,block=True)
 
-        for i in range(0, int(self.RATE / self.CHUNK_SIZE * recording_time)):
+        print('Recording ...')
+
+        for i in range(0, int(self.RATE / self.CHUNK_SIZE * (recording_time+0.1))):
             # little endian, signed short
             data = self.stream.read(self.CHUNK_SIZE)
 

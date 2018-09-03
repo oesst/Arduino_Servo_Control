@@ -27,8 +27,8 @@ const double SIG_180 = (MAX_P_180 - MIN_P_180) / 180.0;
 const double SIG_270 = (MAX_P_270 - MIN_P_270) / 270.0;
 
 /* Initialize servos */
-int servo_180_pin = 8;
-int servo_270_pin = 7;
+int servo_180_pin = 5;
+int servo_270_pin = 6;
 
 /* Define available CmdMessenger commands */
 enum {
@@ -36,6 +36,7 @@ enum {
   is_connected,
   pan_angle,
   pan_angle_set,
+  pan_angle_fast,
   tilt_angle,
   tilt_angle_set,
   acknowledge,
@@ -97,6 +98,24 @@ void on_pan_angle(void) {
   c.sendBinCmd(pan_angle_set, angle);
 }
 
+
+/* callback */
+void on_pan_angle_fast(void) {
+
+  /* Get servo control angle */
+  int angle = c.readBinArg<int>();
+
+  // delay to get proper rotation speed
+  servo_270.writeMicroseconds(MIN_P_180 + angle * SIG_180);
+ 
+  // save current angle to achieve a smooth turning
+  current_tilt_angle = angle;
+
+  /* send confirmation */
+  c.sendBinCmd(pan_angle_set, angle);
+}
+
+
 /* callback */
 void on_tilt_angle(void) {
 
@@ -141,6 +160,7 @@ void on_unknown_command(void) {
 void attach_callbacks(void) {
   c.attach(connection, on_connection);
   c.attach(pan_angle, on_pan_angle);
+  c.attach(pan_angle_fast, on_pan_angle_fast);
   c.attach(tilt_angle, on_tilt_angle);
   c.attach(on_unknown_command);
 }

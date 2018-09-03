@@ -16,6 +16,7 @@ class ServoController:
     def __init__(self):
         # Initialize the board and baud_rate
         arduino = PyCmdMessenger.ArduinoBoard("/dev/ttyACM0", baud_rate=9600)
+        # arduino = PyCmdMessenger.ArduinoBoard("/dev/ttyUSB0", baud_rate=9600)
         # Initialize messenger
         self.controller = PyCmdMessenger.CmdMessenger(arduino, ServoController.commands)
         self.controller.send('connection')
@@ -48,7 +49,7 @@ class ServoController:
             elevation =elevation +90
             angle = 270 - elevation
 
-            self.controller.send('tilt_angle', angle)
+            self.controller.send('tilt_angle', int(angle))
             self.receive_msg()
         else:
             print('Given angle not in controllable range... Abort!')
@@ -59,7 +60,7 @@ class ServoController:
         # azimuth angle needs to be in range [-90,90]
         if -90 <= azimuth <= 90:
             angle = azimuth + 90
-            self.controller.send('pan_angle', angle)
+            self.controller.send('pan_angle', int(angle))
             # self.receive_msg()
         else:
             print('Given angle not in controllable range... Abort!')
