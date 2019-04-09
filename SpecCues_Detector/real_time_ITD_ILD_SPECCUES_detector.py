@@ -5,7 +5,7 @@ import numpy as np
 import pyaudio
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtCore
-from scipy.signal import welch, butter, lfilter
+from scipy.signal import welch, butter, lfilter, get_window
 import signal
 import matplotlib.pyplot as plt
 from som import SOM
@@ -14,14 +14,14 @@ from servo_controller import ServoController
 
 
 # TODO The PSD values are of size 44. We either need to adapt the nperseg of pwelch function or use different som weights (different input to som algorithm)
-# 
+# TODO do a trace route over the incoming psd data to smooth it?
 
 # This script calculates ITD, ILD and Spectral Cues from real time data (2 microphones)
 class RealTimeSpecAnalyzer(pg.GraphicsWindow):
     def __init__(self):
         super(RealTimeSpecAnalyzer, self).__init__(title="Live FFT")
         self.pa = pyaudio.PyAudio()
-        
+
         ### Initialize Connection to Arduino Board
         self.controller = ServoController()
         # register the exiting function
@@ -35,12 +35,11 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             print((i, dev['name'], dev['maxInputChannels']))
 
         # initialize SOM data
-        self.som = SOM('/home/oesst/ownCloud/PhD/Code/Python/neural_som_readout/som_data.mat',4)
-
+        self.som = SOM('/home/oesst/ownCloud/PhD/Code/Python/head_recording_control/SpecCues_Detector/som_data_L-R_L+R_whiteNoise_normaleEars_recordings.mat', 4)
 
         # CONSTANTS
         self.RATE = 44100
-        self.CHUNK_SIZE = 4096
+        self.CHUNK_SIZE = 1024 * 4  # <- maybe change to 1024 (so that it is equal to the recording size, DOES NOT change PSD length)
         self.FORMAT = pyaudio.paInt16
         self.TIME = 2  # time period to display
         self.INTENS_THRES = -40  # intensity threshold for ILD & ITD in db
@@ -49,12 +48,13 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         self.logScale = False  # display frequencies in log scale
         self.max_itd = 1.3  # determines the how precise the head follows the sound
         self.max_ild = 20  # determines the how precise the head follows the sound
-        self.binCount = 30
+        self.binCount = 30  # determines the resolution of the ITD values
         self.sum_angle = []
         self.skip_recording = False
         self.skip_recording_counter = 0
-        self.show_spectrogram = True
+        self.show_spectrogram = False
         self.calc_spectral_cues = True
+        self.azimuth_Detector_On = False
 
         # data storage
         self.data_l = np.zeros(self.RATE * self.TIME)
@@ -67,7 +67,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         self.ilds = np.zeros(self.binCount)  # store only the recent 100 values
         self.timeValues = np.linspace(0, self.TIME, self.TIME * self.RATE)
         self.img_array = -np.ones((500, int(self.fft_bins / 2)))
-        self.response_SOM_grid = np.zeros((self.som.n_height,self.som.n_width))
+        self.response_SOM_grid = np.zeros((self.som.n_height, self.som.n_width))
         # set controller to zero position then wait for it
         self.controller.zeroing()
         # set head azimuth angle
@@ -108,7 +108,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         self.ts_2 = self.p1.plot(pen=(2, 2))
 
         if self.show_spectrogram:
-
             self.nextRow()
             # self.viewBox = self.addViewBox(colspan=2)
             # self.viewBox.setLabel('bottom', 'Time', 's')
@@ -130,10 +129,9 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
 
             color = plt.cm.afmhot
             colors = color(range(0, 256))[:]
-            pos = np.linspace(0,1,256)
+            pos = np.linspace(0, 1, 256)
             cmap = pg.ColorMap(pos, colors)
             lut = cmap.getLookupTable(0.0, 1.0, 256)
-
 
             self.img.setLookupTable(lut)
             self.img.setLevels([-1, 0])
@@ -141,7 +139,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             # self.win = np.hanning(self.CHUNK_SIZE)
 
         if self.calc_spectral_cues:
-
             self.nextRow()
             # self.viewBox = self.addViewBox(colspan=2)
             # self.viewBox.setLabel('bottom', 'Time', 's')
@@ -154,7 +151,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             self.imgSOM = pg.ImageItem()
             self.pSOM.addItem(self.imgSOM)
             self.pSOM.setLabel('bottom', 'Elevation', 'deg')
-            self.pSOM.setLabel('left', 'Azimuth','deg')
+            self.pSOM.setLabel('left', 'Azimuth', 'deg')
             # self.viewBox.addItem(self.img)
             # self.viewBox.setXRange(100,150)
             # self.viewBox.setYRange(500, 100)
@@ -162,10 +159,9 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
 
             color = plt.cm.afmhot
             colors = color(range(0, 256))[:]
-            pos = np.linspace(0,1,256)
+            pos = np.linspace(0, 1, 256)
             cmap = pg.ColorMap(pos, colors)
             lut = cmap.getLookupTable(0.0, 1.0, 256)
-
 
             self.imgSOM.setLookupTable(lut)
             self.imgSOM.setLevels([0, 1])
@@ -208,7 +204,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         #     self.spec_right.setData(fillLevel=0)
         #     self.p3.setLabel('left', 'PSD', '1 / Hz')
 
-
         # write ITD & ILD in a box
         # self.viewBox = self.addViewBox(colspan=2)
         # self.textITD = pg.TextItem(text='The ITD is 0.0 ms', anchor=(-1.0, 6.0), border='w', fill=(255, 255, 255), color='#000000')
@@ -231,10 +226,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         p5.setLabel('bottom', 'ILD', '')
         p5.setLabel('left', 'Belief')
 
-
-
-
-
     def initMicrophones(self):
         self.stream = self.pa.open(format=self.FORMAT,
                                    channels=2,
@@ -254,7 +245,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
 
         return data_l, data_r
 
-    def overlap(self, X, window_size, window_step):
+    def overlap(self, x, window_size, window_step):
         """
         Create an overlapped version of X
         Parameters
@@ -273,12 +264,12 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         if window_size % 2 != 0:
             raise ValueError("Window size must be even!")
         # Make sure there are an even number of windows before stridetricks
-        append = np.zeros((window_size - len(X) % window_size))
-        X = np.hstack((X, append))
+        append = np.zeros((window_size - len(x) % window_size))
+        x = np.hstack((x, append))
 
         ws = window_size
         ss = window_step
-        a = X
+        a = x
 
         valid = len(a) - ws
         nw = (valid) // ss
@@ -293,7 +284,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         return out
 
     def stft(self,
-             X,
+             x,
              fftsize=128,
              step=65,
              mean_normalize=True,
@@ -311,17 +302,17 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         if compute_onesided:
             cut = fftsize // 2
         if mean_normalize:
-            X -= X.mean()
+            x -= x.mean()
 
-        X = self.overlap(X, fftsize, step)
+        x = self.overlap(x, fftsize, step)
 
         size = fftsize
         win = 0.54 - .46 * np.cos(2 * np.pi * np.arange(size) / (size - 1))
-        X = X * win[None]
-        X = local_fft(X)[:, :cut]
-        return X
+        x = x * win[None]
+        x = local_fft(x)[:, :cut]
+        return x
 
-    def pretty_spectrogram(self,d, log=True, thresh=5, fft_size=512, step_size=64):
+    def pretty_spectrogram(self, d, log=True, thresh=5, fft_size=512, step_size=64):
 
         """
         creates a spectrogram
@@ -339,13 +330,9 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         if log == True:
             specgram /= specgram.max()  # volume normalize to max 1
             specgram = np.log10(specgram)  # take log
-            specgram[
-                specgram <
-                -thresh] = -thresh  # set anything less than the threshold as the threshold
+            specgram[specgram < -thresh] = -thresh  # set anything less than the threshold as the threshold
         else:
-            specgram[
-                specgram <
-                thresh] = thresh  # set anything less than the threshold as the threshold
+            specgram[specgram < thresh] = thresh  # set anything less than the threshold as the threshold
 
         return specgram
 
@@ -376,10 +363,14 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         cc = np.real(ifft(f1 * f2))
         return fftshift(cc)
 
-    def get_welch_spectrum(self,data):
-        f, psd = welch(data, self.RATE,nperseg=128)
-        return f, psd
+    def get_welch_spectrum(self, data):
+        # hanning = get_window('hamming',175)
+        # f, psd = welch(data, RATE, hanning,detrend=False)
+        fs = 128  # change that so that it is equal to the readin matlab file
+        window = get_window('hann', fs * 1)
+        f, psd = welch(data, fs=self.RATE, window=window, nfft=fs * 2, noverlap=int(fs / 2), axis=0, scaling="density", detrend=False)
 
+        return f, psd
 
     def find_delay(self, a, b, max_delay=0):
         # very accurate but not so fast as gcc
@@ -418,7 +409,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
                 self.data_r[-self.CHUNK_SIZE:] = data_r
             else:
 
-
                 # plot data in any case. with that we prevent the stop of the plotting
                 self.ts_1.setData(x=self.timeValues, y=self.data_l_tmp)
                 self.ts_2.setData(x=self.timeValues, y=self.data_r_tmp)
@@ -426,7 +416,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
                 # self.spec_right.setData(x=f_l, y=(20 * np.log10(psd_r) if self.logScale else psd_r))
 
                 if self.show_spectrogram:
-
                     psd = self.pretty_spectrogram(
                         data_l.astype('float64'),
                         log=True,
@@ -434,14 +423,11 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
                         fft_size=self.fft_bins,
                         step_size=self.CHUNK_SIZE)
 
-
                     # roll down one and replace leading edge with new data
 
                     self.img_array = np.roll(self.img_array, -1, 0)
                     self.img_array[-1:] = psd
                     self.img.setImage(self.img_array, autoLevels=False)
-
-
 
                 # set back skip recording var
                 if self.skip_recording_counter > 2:
@@ -456,18 +442,16 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             print(ioerr)
             pass
 
-
-
         # get frequency spectrum
         f_l, psd_l = self.get_welch_spectrum(data_l)
         f_r, psd_r = self.get_welch_spectrum(data_r)
 
-         # make log scale
-        psd_l = np.log10(psd_l)*20
-        psd_r = np.log10(psd_r)*20
+        # make log scale
+        psd_l = np.log10(psd_l) * 20
+        psd_r = np.log10(psd_r) * 20
 
         # cut off frequencies at the end (>18000Hz)
-        indis = f_l < 15000
+        indis = f_l < 20000
 
         f_l = f_l[indis]
         f_r = f_r[indis]
@@ -481,10 +465,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         # print(psd_l.shape) # -> is 44
         # print(psd_r.shape) # -> is 44
 
-
-
-
-        # filter the signal 
+        # filter the signal
         data_l = self.butter_bandpass_filter(data_l, 100, 15000, self.RATE, order=2)
         data_r = self.butter_bandpass_filter(data_r, 100, 15000, self.RATE, order=2)
 
@@ -504,7 +485,7 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             # # calculate ILD, use only frequencies between 1500 and 10000 Hz (indicies 138 til 927)
             ILD = 10 * np.log10(np.sum(np.abs(signal_l) ** 2) / np.sum(np.abs(signal_r) ** 2))
             # store values in counter index -> only recent 100 values
-            self.ilds[self.counter] = ILD-1.5
+            self.ilds[self.counter] = ILD - 1.5
 
             # calculate ITD, use only frequencies between 100 and 1000 Hz (indicies 8 til 91)
             signal_itd_l = data_l
@@ -514,28 +495,40 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
             # store values in counter index -> only recent 100 values
             self.itds[self.counter] = (ITD * 1000)
 
-
-            # calcualte location based on spectral cues 
+            # calcualte location based on spectral cues
             if self.calc_spectral_cues:
                 # TODO be careful to use the correct data as an input e.g. [PSDL,PSDR] or [PSDR/PSDR,ITD,ILD]
-                f_perceived,winning_node_activity,winning_node_inds = self.som.calculate_location(psd_r)
-                trace = 0.2
+                # rescale
+                tmp1 = psd_l - psd_r
+                tmp1 += - (np.min(tmp1))
+                tmp1 /= np.max(tmp1)
+
+                tmp2 = psd_l + psd_r
+                tmp2 += - (np.min(tmp2))
+                tmp2 /= np.max(tmp2)
+
+                tmp = np.concatenate((tmp1, tmp2))
+                f_perceived, winning_node_activity, winning_node_inds = self.som.calculate_location(tmp)
+                trace = 0.99
 
                 # normalize
                 activity = self.som.response_activity
-                activity += -(np.min(activity[np.nonzero(activity)]))
-                activity /= np.max(activity)
-                
+                # activity += -(np.min(activity[np.nonzero(activity)]))
+                # activity /= np.max(activity)
+
                 # create a grid
-                activity = np.reshape(activity,(self.som.n_height,self.som.n_width))
+                activity[:] = 0.0
+                activity[winning_node_inds] = 1.0
+                # activity = self.som.response_activity
+                # activity[activity<0.75] = 0.0
+                activity = np.reshape(activity, (self.som.n_height, self.som.n_width))
 
                 # make a smooth transition between the received data points 
-                self.response_SOM_grid = trace*self.response_SOM_grid + (1-trace)*activity
+                self.response_SOM_grid = trace * self.response_SOM_grid + (1 - trace) * activity
                 # set the new image
                 self.imgSOM.setImage(self.response_SOM_grid, autoLevels=False)
 
-
-
+                print(winning_node_inds)
 
             # update textbox
             # self.textILD.setPlainText('The ILD is %f ' % ILD)
@@ -560,7 +553,6 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
         # self.spec_right.setData(x=f_l, y=(20 * np.log10(psd_r) if self.logScale else psd_r))
 
         if self.show_spectrogram:
-
             psd = self.pretty_spectrogram(
                 data_l.astype('float64'),
                 log=True,
@@ -568,84 +560,74 @@ class RealTimeSpecAnalyzer(pg.GraphicsWindow):
                 fft_size=self.fft_bins,
                 step_size=self.CHUNK_SIZE)
 
-
             # roll down one and replace leading edge with new data
 
             self.img_array = np.roll(self.img_array, -1, 0)
             self.img_array[-1:] = psd
             self.img.setImage(self.img_array, autoLevels=False)
 
+        if self.azimuth_Detector_On:
 
+            ###########################################
+            ###          HEAD CONTROLLER            ###
+            ###########################################
 
-        ###########################################
-        ###          HEAD CONTROLLER            ###
-        ###########################################
+            # # determine max ITD
+            # ITD = np.histogram(self.itds, bins=np.linspace(-self.max_itd, self.max_itd, 180))
+            # ILD = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, 180))
 
-        # # determine max ITD
-        # ITD = np.histogram(self.itds, bins=np.linspace(-self.max_itd, self.max_itd, 180))
-        # ILD = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, 180))
+            # y,x = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, 500))
+            # ILD = np.argmax(y)-250
 
-        # y,x = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, 500))
-        # ILD = np.argmax(y)-250
+            histCount = 180
 
-        histCount = 180
+            ########################
+            ###        ILD       ###
+            ########################
+            # maybe the offset depends actually on the noise? or background noise ?
+            offset = 2
+            y, x = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, histCount))
+            angle_ILD = -int(np.argmax(y) - histCount / 2) + offset
 
+            sd_ILD = np.std(y)
 
-        ########################
-        ###        ILD       ###
-        ########################
-        # maybe the offset depends actually on the noise? or background noise ?
-        offset = 2
-        y, x = np.histogram(self.ilds, bins=np.linspace(-self.max_ild, self.max_ild, histCount))
-        angle_ILD = -int(np.argmax(y) - histCount / 2) + offset
+            # # maybe for the ILD use a fix value instead of the angle?
+            # if np.abs(angle_ILD) > 2:
+            #     self.azimuth = self.azimuth + angle_ILD*0.05
 
-        sd_ILD = np.std(y)
+            ########################
+            ###        ITD       ###
+            ########################
 
-        # # maybe for the ILD use a fix value instead of the angle?
-        # if np.abs(angle_ILD) > 2:
-        #     self.azimuth = self.azimuth + angle_ILD*0.05
+            y, x = np.histogram(self.itds, bins=np.linspace(-self.max_itd, self.max_itd, histCount))
+            angle_ITD = int(np.argmax(y) - histCount / 2)
+            sd_ITD = np.std(y)
 
-        ########################
-        ###        ITD       ###
-        ########################
+            # # turn the head to ensure that the itd has smallest possible value
+            # if np.abs(angle_ITD) > 2:
+            #     self.azimuth = self.azimuth + angle_ITD*0.05
 
-        y, x = np.histogram(self.itds, bins=np.linspace(-self.max_itd, self.max_itd, histCount))
-        angle_ITD = int(np.argmax(y) - histCount / 2)
-        sd_ITD = np.std(y)
+            # calculate final angle to look at. TODO use a weighting function for ITD and ILD
+            # first try...
+            angle = (angle_ILD * sd_ILD + angle_ITD * sd_ITD) / (sd_ILD + sd_ITD)
 
-        # # turn the head to ensure that the itd has smallest possible value
-        # if np.abs(angle_ITD) > 2:
-        #     self.azimuth = self.azimuth + angle_ITD*0.05
+            # print(sd_ITD,'',sd_ILD)
 
+            # turn the head to ensure that the itd has smallest possible value
+            if np.abs(angle) > 2:
+                self.azimuth = self.azimuth + angle * 0.05
 
-        # calculate final angle to look at. TODO use a weighting function for ITD and ILD
-        # first try...
-        angle = (angle_ILD*sd_ILD+angle_ITD*sd_ITD)/(sd_ILD+sd_ITD)
+            # just to be sure that we stay in the range...
+            if self.azimuth > 90:
+                self.azimuth = 90
+            elif self.azimuth < -90:
+                self.azimuth = -90
 
-        # print(sd_ITD,'',sd_ILD)
+            if self.counter % 5 == 0:
+                self.controller.set_azimuth(self.azimuth)
 
-
-
-        # turn the head to ensure that the itd has smallest possible value
-        if np.abs(angle) > 2:
-            self.azimuth = self.azimuth + angle*0.05
-
-
-
-
-
-        # just to be sure that we stay in the range...
-        if self.azimuth > 90:
-            self.azimuth = 90
-        elif self.azimuth < -90:
-            self.azimuth = -90
-
-        if self.counter % 5 == 0:
-
-            self.controller.set_azimuth(self.azimuth)
-
-            # the servos are moving now, so skip the recordings
-            self.skip_recording = True
+                # the servos are moving now, so skip the recordings
+                self.skip_recording = True
 
     def closeEvent(self, event):
         self.controller.reset()

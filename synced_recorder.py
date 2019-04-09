@@ -15,7 +15,6 @@ import playsound as ps
 # This script simultaneously records sound from 2 input sources and stores it in two wav files
 # Call it like that: python mic_sync_recorder.py name_of_recorded_files recording_time
 
-
 class SyncedRecorder:
     def __init__(self,playback_sound = []):
         self.pa = pyaudio.PyAudio()
@@ -30,6 +29,7 @@ class SyncedRecorder:
             self.play_sound = True
             self.playback_sound = playback_sound
             self.recording_time = sf.info(playback_sound).duration
+            print(self.recording_time)
             self.RATE = sf.info(playback_sound).samplerate
 
     def initMicrophones(self):
@@ -58,7 +58,6 @@ class SyncedRecorder:
             print(count)
             count -= 1
             time.sleep(1)
-
         now = time.time()
 
         data_array = array.array('h')
@@ -72,7 +71,7 @@ class SyncedRecorder:
 
 
         if self.play_sound:
-            ps.playsound(self.playback_sound,block=True)
+            ps.playsound(self.playback_sound,block=False)
 
         print('Recording ...')
 

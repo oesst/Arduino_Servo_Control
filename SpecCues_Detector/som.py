@@ -60,7 +60,7 @@ class SOM:
         # is equal to matlab dot of 2 matrices
         b = np.diag(self.som_weights.dot(self.som_weights.T))
         c =  input_layer_out.dot(input_layer_out.T)
-        # m is the final activity of the neurons
+        # m is the final activity of the neurons. Normalize it
         m = a / np.sqrt((b)) / np.sqrt(c)
         # get the best L neurons
         winning_node_inds = np.argpartition(m, -self.L)[-self.L:]

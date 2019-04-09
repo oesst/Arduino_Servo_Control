@@ -1,5 +1,6 @@
 import time
 import signal
+import numpy as np
 
 import os
 
@@ -17,13 +18,13 @@ controller = ServoController();
 RECORD_DAS1 = False
 
 # Define recording time in seconds
-RECORDING_TIME = 2
+RECORDING_TIME = 0.2
 # If needed define path to playback sound
 # ATTENTION: The duration of the recording is set to the duration of the playback_sound file !!
 cwd = os.getcwd()
 PLAYBACK_SOUND = os.path.join(cwd,'playback_sounds','white_noise_1_20000_hz_2000ms.wav')
-DIRECTORY = os.path.join(cwd,'recordings_free_field')
-FILE_NAME_PREFIX = 'free_field'
+DIRECTORY = os.path.join(cwd,'recordings_test')
+FILE_NAME_PREFIX = 'whiteNoise_siliconEars_test'
 
 # choose what data to log. Do NOT forget to turn on UDP output in JAER
 if RECORD_DAS1:
@@ -35,7 +36,7 @@ if RECORD_DAS1:
 else:
     from synced_recorder import SyncedRecorder
     if PLAYBACK_SOUND:
-        recorder = SyncedRecorder(PLAYBACK_SOUND)
+        recorder = SyncedRecorder()
     else:
         recorder = SyncedRecorder()
 
@@ -54,11 +55,12 @@ signal.signal(signal.SIGTERM, reset_and_exit)
 ##############################################
 ###         Define Head Locations          ###
 ##############################################
-azimuth = [0, 10, 20, 30, -10, -20, -30]
+azimuth = [0,]
 elevations = [-30, -20, -10, 0, 10, 20, 30]
 
-azimuth = [-90,0,90]
-elevations = [0]
+elevations = np.arange(-90,190,10)
+elevations = elevations.astype('int')
+azimuth = [0]
 
 ##############################################
 ###         Go in Recording Loop           ###
@@ -66,22 +68,9 @@ elevations = [0]
 controller.reset()
 
 print('Recording process starts in 20s....')
-time.sleep(1)
 
-# try:
+time.sleep(10)
 
-    # controller.set_elevation(0)
-    #
-    # controller.set_azimuth(-90)
-    # time.sleep(5)
-    # controller.set_azimuth(-45)
-    # time.sleep(5)
-    # controller.set_azimuth(0)
-    # time.sleep(5)
-    # controller.set_azimuth(45)
-    # time.sleep(5)
-    # controller.set_azimuth(90)
-    # time.sleep(5)
 
 # controller.zeroing()
 for azi in azimuth:
