@@ -71,7 +71,7 @@ class SyncedRecorder:
 
 
         if self.play_sound:
-            ps.playsound(self.playback_sound,block=False)
+            ps.playsound(self.playback_sound,block=True)
 
         print('Recording ...')
 

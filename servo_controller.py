@@ -28,7 +28,7 @@ class ServoController:
             print('Calibrating the motor...')
             self.controller.send('calibrate')
             msg = self.controller.receive()
-            time.sleep(20)
+            time.sleep(30)
             if msg == 1:
                 print('Calibration successful')
             else:
@@ -58,7 +58,7 @@ class ServoController:
         # We use a 270 degree servo control angle for elevation.
         # 0 degree elevation corresponds to 90 degree control angel of the servo, since the head can have higher positive elevation than negative ones
         # elevation angle needs to be in range [-90,180]
-        if -90 <= elevation <= 180:
+        if -90 <= elevation <= 200:
             elevation =elevation +90
             angle =  elevation
 

@@ -38,15 +38,14 @@ time.sleep(0)
 #
 # time.sleep(8)
 #
-# controller.reset()
+controller.reset()
 
 #
-# controller.calibrate()
+controller.calibrate()
 #
-time.sleep(2)
+time.sleep(1)
 
-for i in np.arange(-90,90,1Caepten98
-5):
+for i in np.arange(-90,190,10):
     controller.set_elevation(int(i))
     time.sleep(1)
 

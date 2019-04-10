@@ -21,10 +21,13 @@ RECORD_DAS1 = False
 RECORDING_TIME = 0.2
 # If needed define path to playback sound
 # ATTENTION: The duration of the recording is set to the duration of the playback_sound file !!
+
+sound_file = 'bells'
+
 cwd = os.getcwd()
-PLAYBACK_SOUND = os.path.join(cwd,'playback_sounds','white_noise_1_20000_hz_2000ms.wav')
-DIRECTORY = os.path.join(cwd,'recordings_test')
-FILE_NAME_PREFIX = 'whiteNoise_siliconEars_test'
+PLAYBACK_SOUND = os.path.join(cwd,'playback_sounds',sound_file+'.wav')
+DIRECTORY = os.path.join(cwd,sound_file+'_siliconEars')
+FILE_NAME_PREFIX = sound_file+'_siliconEars'
 
 # choose what data to log. Do NOT forget to turn on UDP output in JAER
 if RECORD_DAS1:
@@ -36,7 +39,7 @@ if RECORD_DAS1:
 else:
     from synced_recorder import SyncedRecorder
     if PLAYBACK_SOUND:
-        recorder = SyncedRecorder()
+        recorder = SyncedRecorder(PLAYBACK_SOUND)
     else:
         recorder = SyncedRecorder()
 
@@ -62,14 +65,16 @@ elevations = np.arange(-90,190,10)
 elevations = elevations.astype('int')
 azimuth = [0]
 
+
+
 ##############################################
 ###         Go in Recording Loop           ###
 ##############################################
-controller.reset()
+# controller.calibrate()
 
 print('Recording process starts in 20s....')
 
-time.sleep(10)
+# time.sleep(5)
 
 
 # controller.zeroing()
@@ -83,7 +88,7 @@ for azi in azimuth:
     for elev in elevations:
         # bring head in correct position
         controller.set_elevation(elev)
-        # time.sleep(1) # <- no need to wait because recorder waits before recording automatically
+        time.sleep(1) # <- no need to wait because recorder waits before recording automatically
 
         save_path = os.path.join(azi_directory, FILE_NAME_PREFIX + '_azi_' + str(azi) + '_ele_' + str(elev))
 
